@@ -1,0 +1,57 @@
+name: Deploy ECR (SAM)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/template-ecr.yaml'
+      - '.github/workflows/deploy-ecr.yaml'
+
+jobs:
+  deploy:
+    name: Deploy ECR template
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-region: us-east-1
+          role-to-assume: ${{ secrets.PIPELINE_EXECUTION_ROLE }}
+
+      - name: Validate template
+        working-directory: backend
+        run: |
+          sam validate -t template-ecr.yaml
+
+      - name: Deploy ECR stack
+        working-directory: backend
+        run: |
+            sam build
+
+            DEPLOY_JSON=$(
+                  sam deploy \
+                    --template-file template-ecr.yaml \
+                    --config-env dev \
+                    --s3-bucket "${{ secrets.ARTIFACTS_BUCKET_NAME }}" \
+                    --role-arn "${{ secrets.CLOUDFORMATION_EXECUTION_ROLE }}" \
+                    --no-fail-on-empty-changeset \
+                    --output json
+                )
+
+            # Try to parse ECR URI directly from sam's JSON output
+            ECR_URI=$(echo "$DEPLOY_JSON" | jq -r '.Outputs.BoilerplateAgentEcrRepositoryUri // empty')
+
+            # Export for later steps and add to job summary
+            echo "ecr_uri=$ECR_URI" >> "$GITHUB_OUTPUT"
+            {
+              echo "### ECR Repository"
+              echo ""
+              echo "\`$ECR_URI\`"
+            } >> "$GITHUB_STEP_SUMMARY"

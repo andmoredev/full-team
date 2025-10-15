@@ -1,0 +1,36 @@
+# SAM configuration file
+version: 0.1
+
+default:
+  build:
+    parameters:
+      cached: true
+      parallel: true
+
+  validate:
+    parameters:
+      lint: true
+
+  sync:
+    parameters:
+      watch: true
+
+  local_start_api:
+    parameters:
+      warm_containers: "EAGER"
+
+  local_start_lambda:
+    parameters:
+      warm_containers: "EAGER"
+
+# Environment-specific configurations
+dev:
+  deploy:
+    parameters:
+      region: "us-east-1"
+      stack_name: "boilerplate-system-dev"
+      s3_prefix: "boilerplate-system-dev"
+      tags: "Environment=dev Project=boilerplate-system"
+      capabilities: "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
+      confirm_changeset: false
+      fail_on_empty_changeset: false

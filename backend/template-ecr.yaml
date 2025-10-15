@@ -1,0 +1,30 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Multi-agent health management system backend
+
+Resources:
+  BoilerplateAgentEcrRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub ${AWS::StackName}-agent-boilerplate
+      ImageTagMutability: MUTABLE
+      EmptyOnDelete: true
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      RepositoryPolicyText:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowPullFromAccount
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action:
+              - ecr:BatchGetImage
+              - ecr:GetDownloadUrlForLayer
+
+Outputs:
+  BoilerplateAgentEcrRepositoryUri:
+    Description: ECR Repository URI for boilerplate agent
+    Value: !GetAtt BoilerplateAgentEcrRepository.RepositoryUri
+    Export:
+      Name: !Sub "${AWS::StackName}-boilerplate-agent-ecr-uri"
