@@ -34,3 +34,4 @@ dev:
       capabilities: "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
       confirm_changeset: false
       fail_on_empty_changeset: false
+      on_failure: "DELETE"
