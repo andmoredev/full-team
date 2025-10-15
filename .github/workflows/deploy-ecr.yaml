@@ -33,7 +33,7 @@ jobs:
       - name: Deploy ECR stack
         working-directory: backend
         run: |
-            sam build
+            sam build \
               --template-file template-ecr.yaml
 
             DEPLOY_JSON=$(
