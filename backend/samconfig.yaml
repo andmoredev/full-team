@@ -25,6 +25,10 @@ default:
 
 # Environment-specific configurations
 dev:
+  list_stack_outputs:
+    parameters:
+      output: json
+      stack_name: "boilerplate-system-dev"
   deploy:
     parameters:
       region: "us-east-1"
