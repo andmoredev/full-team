@@ -34,6 +34,7 @@ jobs:
         working-directory: backend
         run: |
             sam build
+              --template-file template-ecr.yaml
 
             DEPLOY_JSON=$(
                   sam deploy \
