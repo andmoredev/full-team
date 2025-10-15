@@ -36,23 +36,21 @@ jobs:
             sam build \
               --template-file template-ecr.yaml
 
-            DEPLOY_JSON=$(
-                  sam deploy \
-                    --template-file template-ecr.yaml \
-                    --config-env dev \
-                    --s3-bucket "${{ secrets.ARTIFACTS_BUCKET_NAME }}" \
-                    --role-arn "${{ secrets.CLOUDFORMATION_EXECUTION_ROLE }}" \
-                    --no-fail-on-empty-changeset \
-                    --output json
-                )
+            sam deploy \
+              --template-file template-ecr.yaml \
+              --config-env dev \
+              --s3-bucket "${{ secrets.ARTIFACTS_BUCKET_NAME }}" \
+              --role-arn "${{ secrets.CLOUDFORMATION_EXECUTION_ROLE }}" \
+              --no-fail-on-empty-changeset
 
-            # Try to parse ECR URI directly from sam's JSON output
-            ECR_URI=$(echo "$DEPLOY_JSON" | jq -r '.Outputs.BoilerplateAgentEcrRepositoryUri // empty')
+      - name: Get Stack Outputs
+        working-directory: backend
+        id: get_outputs
+        run: |
+            sam list stack-outputs \
+              --config-env dev \
+              --output json > sam_deploy.json
 
-            # Export for later steps and add to job summary
-            echo "ecr_uri=$ECR_URI" >> "$GITHUB_OUTPUT"
-            {
-              echo "### ECR Repository"
-              echo ""
-              echo "\`$ECR_URI\`"
-            } >> "$GITHUB_STEP_SUMMARY"
+            ECR_URI=$(jq -r '.[] | select(.OutputKey=="BoilerplateAgentEcrRepositoryUri") | .OutputValue' sam_deploy.json)
+
+            echo "ECR URI: $ECR_URI" >> $GITHUB_STEP_SUMMARY
