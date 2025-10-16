@@ -1,13 +1,16 @@
-# Use uv's ARM64 Python base image
-FROM --platform=linux/arm64 ghcr.io/astral-sh/uv:python3.11-bookworm-slim
+# Base image (multi-arch official Python). We'll install uv manually to avoid exec format issues in CodeBuild x86 builders.
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy uv files
+ENV UV_VERSION=0.1.45
+RUN pip install --no-cache-dir "uv==${UV_VERSION}"
+
+# Copy project dependency files
 COPY pyproject.toml uv.lock ./
 
-# Install dependencies (including strands-agents)
-RUN uv sync --frozen --no-cache
+# Use uv to resolve & install (fallback to pip if uv.lock not compatible)
+RUN uv sync --frozen --no-cache || pip install -r <(uv export --format requirements || echo '')
 
 # Copy agent file
 COPY agent.py ./
