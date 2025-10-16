@@ -143,6 +143,7 @@ jobs:
       - name: Validate runtime template
         working-directory: backend
         run: |
+          sam --version
           sam validate -t template.yaml
 
       - name: Deploy runtime stack
