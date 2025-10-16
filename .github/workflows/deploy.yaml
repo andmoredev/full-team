@@ -4,9 +4,6 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
-    paths:
-      - 'backend/template-ecr.yaml'
-      - '.github/workflows/deploy-ecr.yaml'
 
 jobs:
   deploy:
