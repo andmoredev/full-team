@@ -49,7 +49,7 @@ jobs:
         run: |
             sam list stack-outputs \
               --config-env dev \
-              --output json > sam_deploy.json
+              > sam_deploy.json
 
             ECR_URI=$(jq -r '.[] | select(.OutputKey=="BoilerplateAgentEcrRepositoryUri") | .OutputValue' sam_deploy.json)
 
