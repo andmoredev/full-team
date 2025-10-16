@@ -10,7 +10,7 @@ jobs:
     name: Deploy ECR Repositories
     outputs:
       ecr_uri: ${{ steps.get_outputs.outputs.ecr_uri }}
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
@@ -56,7 +56,7 @@ jobs:
   build-and-push-image:
       name: Build & Push Boilerplate Agent Image
       needs: deploy-ecr
-      runs-on: ubuntu-latest
+      runs-on: ubuntu-24.04-arm
       permissions:
         id-token: write
         contents: read
@@ -90,35 +90,27 @@ jobs:
           run: |
             aws ecr get-login-password --region ${{ steps.derive.outputs.region }} | docker login --username AWS --password-stdin ${{ steps.derive.outputs.account_id }}.dkr.ecr.${{ steps.derive.outputs.region }}.amazonaws.com
 
-        - name: Set up QEMU (multi-arch)
-          uses: docker/setup-qemu-action@v3
-          with:
-            platforms: linux/arm64
-
-        - name: Set up Buildx
-          uses: docker/setup-buildx-action@v3
-          with:
-            install: true
-
-        - name: Build & Push ARM64 Image
+        - name: Build Image
           working-directory: backend/agents/boilerplate
           id: build
-          env:
-            IMAGE_TAG: latest
           run: |
-            set -e
+            IMAGE_TAG=latest
+            docker build -t ${{ steps.derive.outputs.repo_name }}:$IMAGE_TAG .
+            docker tag ${{ steps.derive.outputs.repo_name }}:$IMAGE_TAG ${{ steps.derive.outputs.account_id }}.dkr.ecr.${{ steps.derive.outputs.region }}.amazonaws.com/${{ steps.derive.outputs.repo_name }}:$IMAGE_TAG
             SHORT_SHA=${GITHUB_SHA::12}
-            REGISTRY="${{ steps.derive.outputs.account_id }}.dkr.ecr.${{ steps.derive.outputs.region }}.amazonaws.com/${{ steps.derive.outputs.repo_name }}"
-            echo "Building ARM64 image for $REGISTRY:$IMAGE_TAG and $REGISTRY:$SHORT_SHA"
-            docker buildx build \
-              --platform linux/arm64 \
-              -t "$REGISTRY:$IMAGE_TAG" \
-              -t "$REGISTRY:$SHORT_SHA" \
-              --push .
+            docker tag ${{ steps.derive.outputs.repo_name }}:$IMAGE_TAG ${{ steps.derive.outputs.account_id }}.dkr.ecr.${{ steps.derive.outputs.region }}.amazonaws.com/${{ steps.derive.outputs.repo_name }}:$SHORT_SHA
             echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
-            echo "latest_image=$REGISTRY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-            echo "sha_image=$REGISTRY:$SHORT_SHA" >> $GITHUB_OUTPUT
-            echo "Pushed ARM64 image tags: $IMAGE_TAG and $SHORT_SHA" >> $GITHUB_STEP_SUMMARY
+            echo "Built tags: $IMAGE_TAG and $SHORT_SHA" >> $GITHUB_STEP_SUMMARY
+
+        - name: Push Image
+          id: push
+          run: |
+            SHORT_SHA='${{ steps.build.outputs.short_sha }}'
+            docker push ${{ steps.derive.outputs.account_id }}.dkr.ecr.${{ steps.derive.outputs.region }}.amazonaws.com/${{ steps.derive.outputs.repo_name }}:latest
+            docker push ${{ steps.derive.outputs.account_id }}.dkr.ecr.${{ steps.derive.outputs.region }}.amazonaws.com/${{ steps.derive.outputs.repo_name }}:$SHORT_SHA || true
+            echo "latest_image=${{ steps.derive.outputs.account_id }}.dkr.ecr.${{ steps.derive.outputs.region }}.amazonaws.com/${{ steps.derive.outputs.repo_name }}:latest" >> $GITHUB_OUTPUT
+            echo "sha_image=${{ steps.derive.outputs.account_id }}.dkr.ecr.${{ steps.derive.outputs.region }}.amazonaws.com/${{ steps.derive.outputs.repo_name }}:$SHORT_SHA" >> $GITHUB_OUTPUT
+            echo "Pushed latest and $SHORT_SHA" >> $GITHUB_STEP_SUMMARY
 
   deploy-runtime:
     name: Deploy AgentCore Runtime
