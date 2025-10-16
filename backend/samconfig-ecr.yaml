@@ -28,12 +28,12 @@ dev:
   list_stack_outputs:
     parameters:
       output: json
-      stack_name: "boilerplate-system-agent-dev"
+      stack_name: "boilerplate-system-ecr-dev"
   deploy:
     parameters:
       region: "us-east-1"
-      stack_name: "boilerplate-system-agent-dev"
-      s3_prefix: "boilerplate-system-agent-dev"
+      stack_name: "boilerplate-system-ecr-dev"
+      s3_prefix: "boilerplate-system-ecr-dev"
       tags: "Environment=dev Project=boilerplate-system"
       capabilities: "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
       confirm_changeset: false

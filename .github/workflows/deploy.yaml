@@ -33,10 +33,13 @@ jobs:
         working-directory: backend
         run: |
             sam build \
-              --template-file template-ecr.yaml
+              --template-file template-ecr.yaml \
+              --config-file samconfig-ecr.yaml \
+              --config-env dev
 
             sam deploy \
               --template-file template-ecr.yaml \
+              --config-file samconfig-ecr.yaml \
               --config-env dev \
               --s3-bucket "${{ secrets.ARTIFACTS_BUCKET_NAME }}" \
               --role-arn "${{ secrets.CLOUDFORMATION_EXECUTION_ROLE }}" \
