@@ -6,8 +6,10 @@ on:
     branches: [ main ]
 
 jobs:
-  deploy:
-    name: Deploy ECR template
+  deploy-ecr:
+    name: Deploy ECR Repositories
+    outputs:
+      ecr_uri: ${{ steps.get_outputs.outputs.ecr_uri }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -47,7 +49,65 @@ jobs:
             sam list stack-outputs \
               --config-env dev \
               > sam_deploy.json
-
             ECR_URI=$(jq -r '.[] | select(.OutputKey=="BoilerplateAgentEcrRepositoryUri") | .OutputValue' sam_deploy.json)
-
+            echo "ecr_uri=$ECR_URI" >> $GITHUB_OUTPUT
             echo "ECR URI: $ECR_URI" >> $GITHUB_STEP_SUMMARY
+
+  build-and-push-image:
+      name: Build & Push Boilerplate Agent Image
+      needs: deploy-ecr
+      runs-on: ubuntu-latest
+      permissions:
+        id-token: write
+        contents: read
+      steps:
+        - name: Checkout
+          uses: actions/checkout@v4
+
+        - name: Configure AWS
+          uses: aws-actions/configure-aws-credentials@v5
+          with:
+            aws-region: us-east-1
+            role-to-assume: ${{ secrets.PIPELINE_EXECUTION_ROLE }}
+
+        - name: Derive repository and region
+          id: derive
+          run: |
+            ECR_URI='${{ needs.deploy-ecr.outputs.ecr_uri }}'
+            if [ -z "$ECR_URI" ]; then
+              echo "Missing ECR URI from previous job" >&2
+              exit 1
+            fi
+            ACCOUNT_ID=$(echo "$ECR_URI" | awk -F'.' '{print $1}')
+            REGION=$(echo "$ECR_URI" | awk -F'.' '{print $4}')
+            REPO_NAME=$(echo "$ECR_URI" | awk -F'/' '{print $2}')
+            echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
+            echo "region=$REGION" >> $GITHUB_OUTPUT
+            echo "repo_name=$REPO_NAME" >> $GITHUB_OUTPUT
+            echo "Using repo $REPO_NAME in $REGION (account $ACCOUNT_ID)" >> $GITHUB_STEP_SUMMARY
+
+        - name: Log in to ECR
+          run: |
+            aws ecr get-login-password --region ${{ steps.derive.outputs.region }} | docker login --username AWS --password-stdin ${{ steps.derive.outputs.account_id }}.dkr.ecr.${{ steps.derive.outputs.region }}.amazonaws.com
+
+        - name: Build Image
+          working-directory: backend/agents/boilerplate
+          id: build
+          run: |
+            IMAGE_TAG=latest
+            docker build -t ${{ steps.derive.outputs.repo_name }}:$IMAGE_TAG .
+            docker tag ${{ steps.derive.outputs.repo_name }}:$IMAGE_TAG ${{ steps.derive.outputs.account_id }}.dkr.ecr.${{ steps.derive.outputs.region }}.amazonaws.com/${{ steps.derive.outputs.repo_name }}:$IMAGE_TAG
+            SHORT_SHA=${GITHUB_SHA::12}
+            docker tag ${{ steps.derive.outputs.repo_name }}:$IMAGE_TAG ${{ steps.derive.outputs.account_id }}.dkr.ecr.${{ steps.derive.outputs.region }}.amazonaws.com/${{ steps.derive.outputs.repo_name }}:$SHORT_SHA
+            echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+            echo "Built tags: $IMAGE_TAG and $SHORT_SHA" >> $GITHUB_STEP_SUMMARY
+
+        - name: Push Image
+          id: push
+          run: |
+            SHORT_SHA='${{ steps.build.outputs.short_sha }}'
+            docker push ${{ steps.derive.outputs.account_id }}.dkr.ecr.${{ steps.derive.outputs.region }}.amazonaws.com/${{ steps.derive.outputs.repo_name }}:latest
+            docker push ${{ steps.derive.outputs.account_id }}.dkr.ecr.${{ steps.derive.outputs.region }}.amazonaws.com/${{ steps.derive.outputs.repo_name }}:$SHORT_SHA || true
+            echo "latest_image=${{ steps.derive.outputs.account_id }}.dkr.ecr.${{ steps.derive.outputs.region }}.amazonaws.com/${{ steps.derive.outputs.repo_name }}:latest" >> $GITHUB_OUTPUT
+            echo "sha_image=${{ steps.derive.outputs.account_id }}.dkr.ecr.${{ steps.derive.outputs.region }}.amazonaws.com/${{ steps.derive.outputs.repo_name }}:$SHORT_SHA" >> $GITHUB_OUTPUT
+            echo "Pushed latest and $SHORT_SHA" >> $GITHUB_STEP_SUMMARY
