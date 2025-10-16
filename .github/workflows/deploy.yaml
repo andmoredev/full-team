@@ -95,7 +95,7 @@ jobs:
             aws ecr get-login-password --region ${{ steps.derive.outputs.region }} | docker login --username AWS --password-stdin ${{ steps.derive.outputs.account_id }}.dkr.ecr.${{ steps.derive.outputs.region }}.amazonaws.com
 
         - name: Build Image
-          working-directory: backend/agents/boilerplate
+          working-directory: backend/src/agents/boilerplate
           id: build
           run: |
             IMAGE_TAG=latest

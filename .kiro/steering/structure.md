@@ -21,30 +21,38 @@ project-name/
 
 ## Backend Structure Standards
 
-The backend follows AWS Serverless Best Practices with a focus on maintainability and scalability:
+The backend follows AWS Serverless Best Practices with a hybrid architecture:
+
+- **Python Agents**: Containerized with AgentCore Runtime (Strands SDK)
+- **Node.js APIs**: Lambda functions for REST endpoints and data processing
 
 ```
 backend/
 ├── src/
-│   ├── functions/          # Lambda function implementations
+│   ├── functions/          # Node.js Lambda function implementations
+│   └── agents/             # Python agent implementations (containerized)
 ├── docs/                   # Documentation and images
 ├── portman/                # API testing configuration
 ├── coverage/               # Test coverage reports
 ├── tmp/                    # Temporary build artifacts
-├── package.json            # Backend dependencies and scripts
+├── package.json            # Node.js API dependencies and scripts
+├── requirements.txt        # Python agent dependencies
 ├── openapi.yaml            # OpenAPI 3.0 specification
-└── eslint.config.mjs       # ESLint configuration
+├── eslint.config.mjs       # ESLint configuration (Node.js)
+└── pyproject.toml          # Python configuration and linting
 ```
 
-### Lambda Function Organization
+### Hybrid Architecture Organization
 
-Lambda functions are organized by domain/resource type following single-responsibility principle:
+#### Node.js API Functions (src/functions/)
+
+Lambda functions for REST APIs organized by domain/resource type:
 
 ```
 src/functions/
-├── [domain-1]/              # Business domain grouping (e.g., users, orders, products)
+├── [domain-1]/              # Business domain grouping (e.g., users, health-profiles)
 │   ├── create-[resource]/
-│   │   ├── index.mjs        # Main Lambda handler
+│   │   ├── index.mjs        # Main Lambda handler (Node.js)
 │   │   └── tests/           # Unit tests for this function
 │   ├── get-[resource]/
 │   ├── get-[resources]/     # List/search endpoints
@@ -55,7 +63,24 @@ src/functions/
 │   ├── create-[resource]/
 │   ├── get-[resource]/
 │   └── [custom-operations]/
-└── shared/                  # Cross-domain shared utilities
+└── shared/                  # Cross-domain shared utilities (Node.js)
+```
+
+#### Python Agent Organization (src/agents/)
+
+Containerized agents using Strands SDK and AgentCore Runtime:
+
+```
+src/agents/
+├── [agent-name]/            # Individual agent implementations
+│   ├── agent.py            # Main agent implementation (Python)
+│   ├── Dockerfile          # Container configuration
+│   ├── requirements.txt    # Python dependencies
+│   ├── config/             # Agent-specific configuration
+│   ├── prompts/            # Agent prompts and instructions
+│   ├── tools/              # Agent-specific tools
+│   └── tests/              # Agent unit tests (pytest)
+└── shared/                 # Shared agent utilities (Python)
 ```
 
 **Example Implementation:**
@@ -93,85 +118,98 @@ For multi-agent systems using Amazon Bedrock AgentCore and AWS Strands SDK:
 
 #### AWS Strands SDK
 
-- Open-source framework with model-first approach for building autonomous agents
+- Python-based open-source framework with model-first approach for building autonomous agents
 - Native support for Model Context Protocol (MCP)
 - Integration with Amazon Bedrock, AWS Lambda, and other AWS services
 - Support for multiple foundation models (Claude, Nova, etc.)
 
 ```
+# Python Agents (containerized with AgentCore Runtime)
+src/agents/
+├── architecture-agent/
+│   ├── agent.py            # Main agent implementation (Python + Strands)
+│   ├── Dockerfile          # Container configuration
+│   ├── requirements.txt    # Python dependencies
+│   ├── config/
+│   │   ├── agent-config.json # AgentCore configuration
+│   │   └── prompts.yaml    # Agent prompts
+│   └── tests/              # pytest unit tests
+├── code-generation-agent/
+├── code-review-agent/
+├── testing-agent/
+├── documentation-agent/
+├── deployment-agent/
+├── monitoring-agent/
+└── shared/                 # Shared Python utilities
+    ├── agentcore_client.py # AgentCore service clients
+    ├── strands_utils.py    # Strands SDK utilities
+    └── agent_base.py       # Base agent class
+
+# Node.js APIs (Lambda functions)
 src/functions/
-├── agents/                 # AI agent implementations
-│   ├── calculator-agent/
-│   │   ├── index.mjs       # Agent Lambda handler
-│   │   ├── agent-config.json # Bedrock AgentCore configuration
-│   │   └── tests/          # Unit tests
-│   ├── nutritionist-agent/
-│   │   ├── index.mjs
-│   │   ├── agent-config.json
-│   │   └── tests/
-│   ├── calorie-calculator-agent/
-│   ├── meal-prep-coach-agent/
-│   ├── progress-tracker-agent/
-│   ├── motivator-agent/
-│   └── shared-agent-utils/ # Common agent utilities
-├── workflows/              # AgentCore Runtime workflow definitions
-│   ├── health-assessment-workflow/
+├── workflows/              # Multi-agent workflow orchestration (Node.js)
+│   ├── development-workflow/
 │   │   ├── index.mjs       # Workflow orchestration handler
-│   │   ├── workflow-definition.json # AgentCore Runtime workflow config
+│   │   ├── workflow-definition.json
 │   │   └── tests/
-│   ├── meal-planning-workflow/
-│   └── progress-tracking-workflow/
-├── api/                    # Traditional API endpoints
-│   ├── health-profile/
-│   ├── user-preferences/
+│   ├── code-review-workflow/
+│   └── deployment-workflow/
+├── api/                    # REST API endpoints (Node.js)
+│   ├── projects/
+│   ├── code-repositories/
+│   ├── agent-proxy/        # Proxy to invoke Python agents
 │   └── system-status/
-└── shared/                 # Cross-domain shared utilities
-    ├── agent-communication/ # Agent-to-agent communication utilities
-    ├── workflow-utils/     # AgentCore Runtime workflow utilities
-    ├── agentcore-clients/  # AgentCore service clients
-    └── strands-utils/      # AWS Strands SDK utilities
+└── shared/                 # Node.js shared utilities
+    ├── agent-communication/ # Agent invocation utilities
+    ├── workflow-utils/     # Workflow orchestration utilities
+    └── agentcore-clients/  # AgentCore service clients (Node.js)
 ```
 
 ### Agent Configuration Structure
 
-Each agent should include standardized configuration:
+Each Python agent should include standardized configuration:
 
 ```
-src/functions/agents/[agent-name]/
-├── index.mjs               # Lambda handler for agent
-├── agent-config.json       # AgentCore Runtime configuration
-├── prompts/               # Agent-specific prompts and instructions
-│   ├── system-prompt.txt
-│   ├── user-interaction-prompts.txt
-│   └── error-handling-prompts.txt
-├── schemas/               # Input/output schemas for agent
+src/agents/[agent-name]/
+├── agent.py               # Main agent implementation (Python + Strands)
+├── Dockerfile             # Container configuration for AgentCore Runtime
+├── requirements.txt       # Python dependencies
+├── config/                # Agent configuration
+│   ├── agent-config.json  # AgentCore Runtime configuration
+│   ├── prompts.yaml       # Agent prompts and instructions
+│   └── model-config.yaml  # Model-specific settings
+├── tools/                 # Agent-specific tools (Python)
+│   ├── __init__.py
+│   └── [tool-name].py
+├── schemas/               # Input/output schemas
 │   ├── input-schema.json
 │   └── output-schema.json
 └── tests/
-    ├── index.test.mjs     # Unit tests
+    ├── test_agent.py      # Unit tests (pytest)
+    ├── test_tools.py      # Tool tests
     └── fixtures/          # Test data and mocks
 ```
 
 ### Workflow Organization
 
-AgentCore Runtime workflows should be organized by business process:
+Multi-agent workflows orchestrated by Node.js Lambda functions:
 
 ```
 src/functions/workflows/[workflow-name]/
-├── index.mjs              # Workflow orchestration handler
-├── workflow-definition.json # AgentCore Runtime workflow configuration
-├── steps/                 # Individual workflow steps
+├── index.mjs              # Workflow orchestration handler (Node.js)
+├── workflow-definition.json # Workflow configuration
+├── steps/                 # Individual workflow steps (Node.js)
 │   ├── step-1-validation.mjs
-│   ├── step-2-agent-coordination.mjs
+│   ├── step-2-agent-coordination.mjs  # Invokes Python agents
 │   └── step-3-result-aggregation.mjs
 └── tests/
-    ├── workflow.test.mjs  # Workflow integration tests
+    ├── workflow.test.mjs  # Workflow integration tests (Vitest)
     └── steps/             # Individual step tests
 ```
 
 ### Shared Modules Structure
 
-Shared utilities promote code reuse and consistency:
+#### Node.js Shared Utilities (src/shared/)
 
 ```
 src/shared/
@@ -180,9 +218,22 @@ src/shared/
 ├── dynamodb/               # DynamoDB utilities and configuration
 ├── lambda-powertools/      # AWS Lambda Powertools setup
 ├── models/                 # Data models and validation schemas
-├── agent-communication/    # Agent-to-agent communication utilities
-├── workflow-utils/         # AgentCore Runtime workflow utilities
-└── agentcore-clients/      # Amazon Bedrock AgentCore service clients
+├── agent-communication/    # Agent invocation utilities
+├── workflow-utils/         # Workflow orchestration utilities
+└── agentcore-clients/      # AgentCore service clients (Node.js)
+```
+
+#### Python Shared Utilities (src/agents/shared/)
+
+```
+src/agents/shared/
+├── __init__.py
+├── agent_base.py           # Base agent class with common functionality
+├── agentcore_client.py     # AgentCore service clients (Python)
+├── strands_utils.py        # Strands SDK utilities
+├── memory_manager.py       # Memory management utilities
+├── tool_registry.py        # Tool registration and management
+└── observability.py        # Logging and monitoring utilities
 ```
 
 ## Frontend Structure Standards
@@ -220,12 +271,20 @@ frontend/
 
 ## File Naming Conventions
 
-### Backend (Node.js/Lambda)
+### Backend APIs (Node.js/Lambda)
 
 - **Lambda handlers**: `index.mjs` (ESM modules)
 - **Test files**: `*.test.mjs` or organized in `tests/` folders
 - **Configuration**: `*.yaml` for CloudFormation/SAM, `*.json` for API specs
 - **Shared modules**: Descriptive names following camelCase
+
+### Backend Agents (Python/Containers)
+
+- **Agent implementations**: `agent.py` (main agent file)
+- **Test files**: `test_*.py` or organized in `tests/` folders
+- **Configuration**: `*.yaml` for agent config, `*.json` for schemas
+- **Shared modules**: Descriptive names following snake_case
+- **Tools**: `[tool_name].py` in tools/ directory
 
 ### Frontend (React)
 
@@ -472,65 +531,66 @@ src/functions/
 
 ## Multi-Agent System Patterns
 
-### Health Management Agent Examples
+### Software Development Agent Examples
 
-For the health management multi-agent system, here are specific domain patterns:
+For the software development multi-agent system, here are specific domain patterns:
 
 ```
 src/functions/
 ├── agents/
-│   ├── calculator-agent/           # BMI, calorie calculations
+│   ├── architecture-agent/         # System design and architecture
 │   │   ├── index.mjs
 │   │   ├── agent-config.json
 │   │   ├── prompts/
-│   │   │   ├── calculation-prompts.txt
-│   │   │   └── validation-prompts.txt
+│   │   │   ├── architecture-design-prompts.txt
+│   │   │   └── technology-selection-prompts.txt
 │   │   └── tests/
-│   ├── nutritionist-agent/         # Meal planning and nutrition advice
+│   ├── code-generation-agent/      # Code writing and implementation
 │   │   ├── index.mjs
 │   │   ├── agent-config.json
 │   │   ├── prompts/
-│   │   │   ├── meal-planning-prompts.txt
-│   │   │   ├── cultural-adaptation-prompts.txt
-│   │   │   └── dietary-restriction-prompts.txt
+│   │   │   ├── code-generation-prompts.txt
+│   │   │   ├── best-practices-prompts.txt
+│   │   │   └── pattern-implementation-prompts.txt
 │   │   └── tests/
-│   ├── calorie-calculator-agent/   # Photo-based calorie estimation
+│   ├── code-review-agent/          # Code quality and review
 │   │   ├── index.mjs
 │   │   ├── agent-config.json
 │   │   ├── prompts/
-│   │   │   ├── image-analysis-prompts.txt
-│   │   │   └── calorie-estimation-prompts.txt
+│   │   │   ├── code-review-prompts.txt
+│   │   │   └── security-analysis-prompts.txt
 │   │   └── tests/
-│   ├── meal-prep-coach-agent/      # Grocery lists and prep schedules
-│   ├── progress-tracker-agent/     # Weight and progress tracking
-│   ├── motivator-agent/            # Encouragement and accountability
+│   ├── testing-agent/              # Test generation and validation
+│   ├── documentation-agent/        # Technical documentation
+│   ├── deployment-agent/           # CI/CD and infrastructure
 │   └── shared-agent-utils/
 │       ├── agentcore-client.mjs
 │       ├── strands-client.mjs
 │       ├── agent-communication.mjs
 │       └── prompt-templates.mjs
 ├── workflows/
-│   ├── health-assessment-workflow/ # Initial user assessment
+│   ├── development-workflow/       # Full development lifecycle
 │   │   ├── index.mjs
 │   │   ├── workflow-definition.json
 │   │   └── steps/
-│   │       ├── collect-user-data.mjs
-│   │       ├── calculate-metrics.mjs
-│   │       └── generate-recommendations.mjs
-│   ├── meal-planning-workflow/     # Weekly meal planning process
+│   │       ├── requirements-analysis.mjs
+│   │       ├── architecture-design.mjs
+│   │       ├── code-generation.mjs
+│   │       └── testing-validation.mjs
+│   ├── code-review-workflow/       # Code review process
 │   │   ├── index.mjs
 │   │   ├── workflow-definition.json
 │   │   └── steps/
-│   │       ├── analyze-preferences.mjs
-│   │       ├── generate-meal-plan.mjs
-│   │       ├── create-grocery-list.mjs
-│   │       └── schedule-prep-tasks.mjs
-│   └── progress-tracking-workflow/ # Regular progress assessment
+│   │       ├── static-analysis.mjs
+│   │       ├── security-scan.mjs
+│   │       ├── performance-review.mjs
+│   │       └── generate-feedback.mjs
+│   └── deployment-workflow/        # Deployment and monitoring
 └── api/
-    ├── user-profile/
-    ├── health-metrics/
-    ├── meal-logs/
-    └── progress-reports/
+    ├── projects/
+    ├── code-repositories/
+    ├── build-pipelines/
+    └── deployment-status/
 ```
 
 ### Agent Communication Patterns

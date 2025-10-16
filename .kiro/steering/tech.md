@@ -2,11 +2,12 @@
 
 ## Core Technologies
 
-- Programming Languages: Node.js 22.x (ESM modules)
+- **Agent Development**: Python 3.11+ with Strands SDK (AI agents only)
+- **API Development**: Node.js 22.x with ESM modules (REST APIs and data processing)
 - AI/ML Platform: Amazon Bedrock AgentCore (Runtime, Identity, Memory, Gateway, Observability)
-- Agent Framework: AWS Strands SDK (open-source agent development framework)
-- Agent Runtime: Amazon Bedrock AgentCore Runtime (for AI agents)
-- API Runtime: AWS Lambda (arm64 architecture, for APIs and data processing)
+- Agent Framework: AWS Strands SDK (Python-based open-source agent development framework)
+- Agent Runtime: Amazon Bedrock AgentCore Runtime (containerized Python agents)
+- API Runtime: AWS Lambda (arm64 architecture, Node.js for APIs and data processing)
 - API: AWS API Gateway with OpenAPI 3.0
 - Database: Amazon DynamoDB
 - Authentication: AWS Cognito (planned)
@@ -14,17 +15,22 @@
 ## Build System
 
 - Build Tool: SAM (Serverless Application Model)
-- Package Manager: npm
-- Bundler: ESBuild (optimized for Lambda)
+- **Agent Package Manager**: pip (Python agents with requirements.txt)
+- **API Package Manager**: npm (Node.js APIs with package.json)
+- Agent Bundler: Docker containers for AgentCore Runtime
+- API Bundler: ESBuild (optimized for Lambda)
 - Infrastructure as Code: SAM Templates
 
 ## Development Environment
 
-- Required Tools: AWS CLI, SAM CLI, Node.js 22.x, npm
-- Recommended IDE/Editor: VS Code with AWS extensions
-- Testing Framework: Vitest
-- Linting: ESLint
-- Code Coverage: c8
+- Required Tools: AWS CLI, SAM CLI, Docker, Python 3.11+, Node.js 22.x, pip, npm
+- Recommended IDE/Editor: VS Code with AWS extensions, Python extension
+- **Agent Testing**: pytest (Python agents)
+- **API Testing**: Vitest (Node.js APIs)
+- **Agent Linting**: ruff or flake8 (Python)
+- **API Linting**: ESLint (Node.js)
+- **Agent Coverage**: coverage.py
+- **API Coverage**: c8
 
 ## AI and Agent Technologies
 
@@ -41,12 +47,19 @@
 ### Setup
 
 ```bash
-# Install dependencies
+# Install API dependencies (Node.js)
 npm install
+
+# Install agent dependencies (Python)
+pip install -r requirements.txt
 
 # Install SAM CLI (if not already installed)
 # macOS: brew install aws-sam-cli
 # Other: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html
+
+# Install Docker for agent containerization
+# macOS: brew install --cask docker
+# Other: https://docs.docker.com/get-docker/
 ```
 
 ### Build
@@ -65,14 +78,15 @@ sam validate --lint
 ### Test
 
 ```bash
-# Run unit tests
+# Run API tests (Node.js)
 npm test
-
-# Run tests with coverage
 npm run test:coverage
-
-# Run linting
 npm run lint
+
+# Run agent tests (Python)
+pytest
+pytest --cov=src/agents
+ruff check src/agents/
 ```
 
 ### Deploy
@@ -90,6 +104,8 @@ sam deploy --config-env prod
 
 ## Dependencies
 
+### API Dependencies (Node.js)
+
 - @aws-lambda-powertools/logger: Structured logging
 - @aws-lambda-powertools/tracer: Distributed tracing
 - @aws-lambda-powertools/metrics: Custom metrics
@@ -98,11 +114,23 @@ sam deploy --config-env prod
 - vitest: Testing framework
 - c8: Code coverage
 
+### Agent Dependencies (Python)
+
+- strands-agents: AI agent framework
+- bedrock-agentcore: AgentCore Runtime integration
+- boto3: AWS SDK for Python
+- pytest: Testing framework
+- coverage: Code coverage
+- ruff: Fast Python linter
+
 ## Version Requirements
 
-- Node.js: 22.x LTS
+- **Agents**: Python 3.11+ (for Strands SDK compatibility)
+- **APIs**: Node.js 22.x LTS
 - AWS CLI: Latest
 - SAM CLI: Latest
+- Docker: Latest (for agent containerization)
+- pip: Latest
 - npm: 10.x or higher
 
 ## Agent-Specific Technologies
