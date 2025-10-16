@@ -1,46 +1,39 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import Dict, Any
-from datetime import datetime,timezone
 from strands import Agent
+import os
+from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
-app = FastAPI(title="Strands Agent Server", version="1.0.0")
+app = BedrockAgentCoreApp()
 
-# Initialize Strands agent
-strands_agent = Agent()
+def create_basic_agent() -> Agent:
+    """Create a basic agent with simple functionality"""
+    system_prompt = """You are a helpful assistant. Answer questions clearly and concisely."""
 
-class InvocationRequest(BaseModel):
-    input: Dict[str, Any]
+    return Agent(
+        system_prompt=system_prompt,
+        name="BasicAgent"
+    )
 
-class InvocationResponse(BaseModel):
-    output: Dict[str, Any]
-
-@app.post("/invocations", response_model=InvocationResponse)
-async def invoke_agent(request: InvocationRequest):
+@app.entrypoint
+async def invoke(payload=None):
+    """Main entrypoint for the agent"""
     try:
-        user_message = request.input.get("prompt", "")
-        if not user_message:
-            raise HTTPException(
-                status_code=400,
-                detail="No prompt found in input. Please provide a 'prompt' key in the input."
-            )
+        # Get the query from payload
+        query = payload.get("prompt", "Hello, how are you?") if payload else "Hello, how are you?"
 
-        result = strands_agent(user_message)
-        response = {
-            "message": result.message,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "model": "strands-agent",
+        # Create and use the agent
+        agent = create_basic_agent()
+        response = agent(query)
+
+        return {
+            "status": "success",
+            "response": response.message['content'][0]['text']
         }
 
-        return InvocationResponse(output=response)
-
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Agent processing failed: {str(e)}")
-
-@app.get("/ping")
-async def ping():
-    return {"status": "healthy"}
+        return {
+            "status": "error",
+            "error": str(e)
+        }
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    app.run()

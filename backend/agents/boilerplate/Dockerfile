@@ -1,22 +1,22 @@
-# Base image (multi-arch official Python). We'll install uv manually to avoid exec format issues in CodeBuild x86 builders.
-FROM python:3.11-slim
-
+FROM public.ecr.aws/docker/library/python:3.11-slim
 WORKDIR /app
 
-ENV UV_VERSION=0.1.45
-RUN pip install --no-cache-dir "uv==${UV_VERSION}"
+# Copy dependency specification (expect requirements.txt tracked in repo)
+COPY requirements.txt requirements.txt
+RUN pip install -r requirements.txt && \
+	pip install aws-opentelemetry-distro>=0.10.1
 
-# Copy project dependency files
-COPY pyproject.toml uv.lock ./
+# Create non-root user
+RUN useradd -m -u 1000 bedrock_agentcore
+USER bedrock_agentcore
 
-# Use uv to resolve & install (fallback to pip if uv.lock not compatible)
-RUN uv sync --frozen --no-cache || pip install -r <(uv export --format requirements || echo '')
-
-# Copy agent file
-COPY agent.py ./
-
-# Expose port
+# Ports (HTTP + optional secondary)
 EXPOSE 8080
+EXPOSE 8000
 
-# Run application
-CMD ["uv", "run", "uvicorn", "agent:app", "--host", "0.0.0.0", "--port", "8080"]
+# Copy remaining application files
+COPY . .
+
+# Launch agent (expects a my_agent.py module providing entrypoint)
+CMD ["opentelemetry-instrument", "python", "-m", "agent"]
+
