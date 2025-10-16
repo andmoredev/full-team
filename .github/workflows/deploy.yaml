@@ -1,4 +1,4 @@
-name: Deploy ECR (SAM)
+name: Deploy
 
 on:
   workflow_dispatch:
@@ -111,3 +111,48 @@ jobs:
             echo "latest_image=${{ steps.derive.outputs.account_id }}.dkr.ecr.${{ steps.derive.outputs.region }}.amazonaws.com/${{ steps.derive.outputs.repo_name }}:latest" >> $GITHUB_OUTPUT
             echo "sha_image=${{ steps.derive.outputs.account_id }}.dkr.ecr.${{ steps.derive.outputs.region }}.amazonaws.com/${{ steps.derive.outputs.repo_name }}:$SHORT_SHA" >> $GITHUB_OUTPUT
             echo "Pushed latest and $SHORT_SHA" >> $GITHUB_STEP_SUMMARY
+
+  deploy-runtime:
+    name: Deploy AgentCore Runtime
+    needs: [deploy-ecr, build-and-push-image]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-region: us-east-1
+          role-to-assume: ${{ secrets.PIPELINE_EXECUTION_ROLE }}
+
+      - name: Derive Image URI
+        id: image
+        run: |
+          ECR_URI='${{ needs.deploy-ecr.outputs.ecr_uri }}'
+          IMAGE_TAG=latest
+          if [ -z "$ECR_URI" ]; then
+            echo "ECR URI missing" >&2; exit 1; fi
+          FULL_URI="$ECR_URI:$IMAGE_TAG"
+          echo "container_uri=$FULL_URI" >> $GITHUB_OUTPUT
+          echo "Using container image: $FULL_URI" >> $GITHUB_STEP_SUMMARY
+
+      - name: Validate runtime template
+        working-directory: backend
+        run: |
+          sam validate -t template.yaml
+
+      - name: Deploy runtime stack
+        working-directory: backend
+        run: |
+          sam build --template-file template.yaml
+          sam deploy \
+            --template-file template.yaml \
+            --config-env dev \
+            --s3-bucket "${{ secrets.ARTIFACTS_BUCKET_NAME }}" \
+            --role-arn "${{ secrets.CLOUDFORMATION_EXECUTION_ROLE }}" \
+            --parameter-overrides ContainerUri=${{ steps.image.outputs.container_uri }} \
+            --no-fail-on-empty-changeset
