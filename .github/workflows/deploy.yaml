@@ -140,17 +140,11 @@ jobs:
           echo "container_uri=$FULL_URI" >> $GITHUB_OUTPUT
           echo "Using container image: $FULL_URI" >> $GITHUB_STEP_SUMMARY
 
-      - uses: aws-actions/setup-sam@v2
-        with:
-          use-installer: true
-          token: ${{ secrets.GITHUB_TOKEN }}
-          version: v1.145.0
-
-      - name: Validate runtime template
-        working-directory: backend
-        run: |
-          sam --version
-          sam validate -t template.yaml
+      # Skip Validate since sam version to 1.144.0 does not support AWS::BedrockAgentCore::Runtime
+      # - name: Validate runtime template
+      #   working-directory: backend
+      #   run: |
+      #     sam validate -t template.yaml
 
       - name: Deploy runtime stack
         working-directory: backend
