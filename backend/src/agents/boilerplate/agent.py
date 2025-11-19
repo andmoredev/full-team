@@ -21,7 +21,7 @@ MEMORY_ID = os.getenv("BEDROCK_AGENTCORE_MEMORY_ID")
 REGION = os.getenv("AWS_REGION", "us-east-1")
 MODEL_ID = os.getenv("MODEL_ID", "us.anthropic.claude-3-7-sonnet-20250219-v1:0")
 
-def create_calculator_agent(memory_config=None) -> Agent:
+def create_agent(memory_config=None) -> Agent:
     """Create a specialized calculator agent with production configuration"""
 
     system_prompt = """You are a specialized health calculator agent. You help users calculate:
@@ -98,7 +98,7 @@ def invoke(payload, context):
             )
 
         # Create agent instance
-        agent = create_calculator_agent(memory_config)
+        agent = create_agent(memory_config)
 
         # Enhance prompt with user metrics if provided
         enhanced_prompt = prompt

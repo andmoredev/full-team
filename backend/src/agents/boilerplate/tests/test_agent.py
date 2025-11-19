@@ -9,7 +9,7 @@ import os
 # Add the agent directory to the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from agent import create_calculator_agent, invoke
+from agent import create_agent, invoke
 
 
 class TestCalculatorAgent:
@@ -17,7 +17,7 @@ class TestCalculatorAgent:
 
     def test_create_calculator_agent_without_memory(self):
         """Test agent creation without memory configuration"""
-        agent = create_calculator_agent()
+        agent = create_agent()
 
         assert agent is not None
         assert agent.name == "CalculatorAgent"
@@ -33,7 +33,7 @@ class TestCalculatorAgent:
             actor_id="test-user"
         )
 
-        agent = create_calculator_agent(memory_config)
+        agent = create_agent(memory_config)
 
         assert agent is not None
         assert agent.name == "CalculatorAgent"
