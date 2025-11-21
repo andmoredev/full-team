@@ -1,18 +1,18 @@
 """
-Calculator Agent - BMI and calorie calculations
-Built with Strands SDK and AgentCore Runtime following production best practices
+Calculator Agent - Dual deployment (AgentCore Runtime + Lambda)
+Built with Strands SDK and Lambda Powertools following production best practices
+Works with both AgentCore Runtime and AWS Lambda
 """
 import os
-import logging
+from aws_lambda_powertools import Logger
 from strands import Agent
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig, RetrievalConfig
 from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Use Lambda Powertools Logger for structured logging
+logger = Logger(service="calculator-agent")
 
 app = BedrockAgentCoreApp()
 
@@ -71,10 +71,24 @@ For calorie calculation, use Harris-Benedict equation with activity multipliers:
     return Agent(**agent_kwargs)
 
 @app.entrypoint
-def invoke(payload, context):
-    """Main entrypoint for the calculator agent"""
+def handler(payload, context):
+    """
+    Universal handler for both AgentCore Runtime and Lambda
+
+    Uses Lambda Powertools Logger for structured logging across both platforms
+
+    Works with:
+    - AgentCore Runtime: @app.entrypoint decorator adapts the signature
+    - Lambda: Standard handler(event, context) signature
+    """
     try:
-        logger.info("Calculator agent invoked", extra={"payload_keys": list(payload.keys()) if payload else []})
+        # Add context information to logger for structured logging
+        logger.append_keys(
+            runtime="agentcore" if hasattr(context, 'timestamp') else "lambda",
+            payload_keys=list(payload.keys()) if payload else []
+        )
+
+        logger.info("Calculator agent invoked")
 
         # Extract request data
         prompt = payload.get("prompt", "") if payload else ""
@@ -83,6 +97,9 @@ def invoke(payload, context):
         # Extract session and actor information from context
         session_id = getattr(context, 'session_id', 'default')
         actor_id = context.headers.get('X-Amzn-Bedrock-AgentCore-Runtime-Custom-Actor-Id', 'user') if hasattr(context, 'headers') else 'user'
+
+        # Add session context to logs
+        logger.append_keys(session_id=session_id, actor_id=actor_id)
 
         # Configure memory if available
         memory_config = None
@@ -107,7 +124,7 @@ def invoke(payload, context):
             enhanced_prompt = f"{prompt}\n\nUser metrics: {metrics_str}"
 
         # Process the request
-        logger.info("Processing calculation request", extra={"session_id": session_id, "actor_id": actor_id})
+        logger.info("Processing calculation request")
         response = agent(enhanced_prompt)
 
         result = {
@@ -122,7 +139,8 @@ def invoke(payload, context):
         return result
 
     except Exception as e:
-        logger.error("Calculator agent error", extra={"error": str(e)}, exc_info=True)
+        # Lambda Powertools automatically includes exception details
+        logger.exception("Calculator agent error")
         return {
             "status": "error",
             "error": str(e),
