@@ -7,6 +7,10 @@ Parameters:
     Type: String
     Description: URI of the container image
 
+  ArtifactsBucketName:
+    Type: String
+    Description: S3 bucket name for deployment artifacts (used for direct code deployment)
+
 Resources:
   BedrockAgentCoreRole:
     Type: AWS::IAM::Role
@@ -41,7 +45,7 @@ Resources:
                 Action:
                   - s3:GetObject
                 Resource:
-                  - !Sub "${BoilerplateAgentDeploymentBucket.Arn}/*"
+                  - !Sub "arn:aws:s3:::${ArtifactsBucketName}/*"
               - Effect: Allow
                 Action:
                   - logs:DescribeLogStreams
@@ -153,19 +157,6 @@ Resources:
         NetworkMode: PUBLIC
       RoleArn: !GetAtt BedrockAgentCoreRole.Arn
 
-  BoilerplateAgentDeploymentBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-
   BoilerplateAgentDirectRuntime:
     Type: AWS::BedrockAgentCore::Runtime
     Properties:
@@ -173,8 +164,8 @@ Resources:
         CodeConfiguration:
           Code:
             S3:
-              Bucket: !Ref BoilerplateAgentDeploymentBucket
-              Key: boilerplate-agent.zip
+              Bucket: !Ref ArtifactsBucketName
+              Key: agents/boilerplate-agent.zip
           EntryPoint:
             - agent.py
             - invoke
@@ -186,12 +177,6 @@ Resources:
       RoleArn: !GetAtt BedrockAgentCoreRole.Arn
 
 Outputs:
-  BoilerplateAgentDeploymentBucket:
-    Description: S3 bucket for boilerplate agent deployment artifacts
-    Value: !Ref BoilerplateAgentDeploymentBucket
-    Export:
-      Name: !Sub "${AWS::StackName}-BoilerplateAgentDeploymentBucket"
-
   BoilerplateAgentDirectRuntimeArn:
     Description: ARN of the Boilerplate Agent Direct Runtime
     Value: !GetAtt BoilerplateAgentDirectRuntime.AgentRuntimeArn
