@@ -116,9 +116,102 @@ jobs:
             echo "sha_image=${{ steps.derive.outputs.account_id }}.dkr.ecr.${{ steps.derive.outputs.region }}.amazonaws.com/${{ steps.derive.outputs.repo_name }}:$SHORT_SHA" >> $GITHUB_OUTPUT
             echo "Pushed latest and $SHORT_SHA" >> $GITHUB_STEP_SUMMARY
 
+  package-and-upload-agent:
+    name: Package & Upload Boilerplate Agent for Direct Deploy
+    needs: deploy-ecr
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-region: us-east-1
+          role-to-assume: ${{ secrets.PIPELINE_EXECUTION_ROLE }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Package agent
+        working-directory: backend
+        run: |
+          AGENT_DIR="src/agents/boilerplate"
+          BUILD_DIR="/tmp/boilerplate-agent-build"
+          ZIP_FILE="/tmp/boilerplate-agent.zip"
+
+          echo "Packaging boilerplate agent for direct code deployment..."
+
+          # Clean up previous builds
+          rm -rf "$BUILD_DIR"
+          rm -f "$ZIP_FILE"
+
+          # Create build directory
+          mkdir -p "$BUILD_DIR"
+
+          # Copy agent code
+          echo "Copying agent code..."
+          cp "$AGENT_DIR/agent.py" "$BUILD_DIR/"
+          cp "$AGENT_DIR/requirements.txt" "$BUILD_DIR/"
+
+          # Install dependencies for ARM64 architecture
+          echo "Installing dependencies for ARM64..."
+          pip install -r "$AGENT_DIR/requirements.txt" \
+            -t "$BUILD_DIR/" \
+            --platform manylinux2014_aarch64 \
+            --only-binary=:all: \
+            --python-version 3.13 \
+            --upgrade
+
+          # Create ZIP file
+          echo "Creating ZIP file..."
+          cd "$BUILD_DIR"
+          zip -r "$ZIP_FILE" . -x "*.pyc" -x "*__pycache__*"
+
+          echo "ZIP_FILE=$ZIP_FILE" >> $GITHUB_ENV
+          echo "Package created: $(du -h $ZIP_FILE | cut -f1)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Get S3 bucket name
+        id: get_bucket
+        run: |
+          STACK_NAME="multi-agent-system-dev"
+          BUCKET_NAME=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='BoilerplateAgentDeploymentBucket'].OutputValue" \
+            --output text 2>/dev/null || echo "")
+
+          if [ -z "$BUCKET_NAME" ]; then
+            echo "Bucket not found yet - will be created in runtime deployment"
+            echo "bucket_exists=false" >> $GITHUB_OUTPUT
+          else
+            echo "bucket_name=$BUCKET_NAME" >> $GITHUB_OUTPUT
+            echo "bucket_exists=true" >> $GITHUB_OUTPUT
+            echo "Found bucket: $BUCKET_NAME" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload to S3
+        if: steps.get_bucket.outputs.bucket_exists == 'true'
+        run: |
+          BUCKET_NAME="${{ steps.get_bucket.outputs.bucket_name }}"
+          aws s3 cp "$ZIP_FILE" "s3://$BUCKET_NAME/boilerplate-agent.zip"
+          echo "✓ Uploaded to s3://$BUCKET_NAME/boilerplate-agent.zip" >> $GITHUB_STEP_SUMMARY
+
+      - name: Save artifact for later upload
+        if: steps.get_bucket.outputs.bucket_exists == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: boilerplate-agent-zip
+          path: /tmp/boilerplate-agent.zip
+          retention-days: 1
+
   deploy-runtime:
     name: Deploy AgentCore Runtime
-    needs: [deploy-ecr, build-and-push-image]
+    needs: [deploy-ecr, build-and-push-image, package-and-upload-agent]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -161,3 +254,26 @@ jobs:
             --role-arn "${{ secrets.CLOUDFORMATION_EXECUTION_ROLE }}" \
             --parameter-overrides ContainerUri=${{ steps.image.outputs.container_uri }} \
             --no-fail-on-empty-changeset
+
+      - name: Download agent artifact if needed
+        if: needs.package-and-upload-agent.outputs.bucket_exists == 'false'
+        uses: actions/download-artifact@v4
+        with:
+          name: boilerplate-agent-zip
+          path: /tmp
+
+      - name: Upload agent to S3 after stack creation
+        run: |
+          STACK_NAME="multi-agent-system-dev"
+          BUCKET_NAME=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='BoilerplateAgentDeploymentBucket'].OutputValue" \
+            --output text)
+
+          if [ -f "/tmp/boilerplate-agent.zip" ]; then
+            echo "Uploading agent ZIP to newly created bucket..."
+            aws s3 cp /tmp/boilerplate-agent.zip "s3://$BUCKET_NAME/boilerplate-agent.zip"
+            echo "✓ Uploaded to s3://$BUCKET_NAME/boilerplate-agent.zip" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Agent already uploaded in previous step" >> $GITHUB_STEP_SUMMARY
+          fi
