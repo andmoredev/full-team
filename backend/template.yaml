@@ -165,9 +165,9 @@ Resources:
           Code:
             S3:
               Bucket: !Ref ArtifactsBucketName
-              Key: agents/boilerplate-agent.zip
+              Prefix: agents/boilerplate-agent.zip
           EntryPoint:
-            - agent.py
+            - agent
             - invoke
           Runtime: PYTHON_3_13
       AgentRuntimeName: BoilerplateAgentDirect
