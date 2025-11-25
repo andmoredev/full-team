@@ -165,7 +165,7 @@ Resources:
           Code:
             S3:
               Bucket: !Ref ArtifactsBucketName
-              Prefix: agents/boilerplate-agent.zip
+              Prefix: agents/boilerplate-agent
           EntryPoint:
             - agent
             - invoke

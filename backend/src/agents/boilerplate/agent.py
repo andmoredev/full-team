@@ -110,9 +110,15 @@ def invoke(payload, context):
         logger.info("Processing calculation request", extra={"session_id": session_id, "actor_id": actor_id})
         response = agent(enhanced_prompt)
 
+        # Extract response text - handle both streaming and non-streaming responses
+        if hasattr(response, 'message'):
+            response_text = response.message.content[0].text if hasattr(response.message, 'content') else str(response.message)
+        else:
+            response_text = str(response)
+
         result = {
             "status": "success",
-            "response": response.message.content[0].text,
+            "response": response_text,
             "session_id": session_id,
             "actor_id": actor_id,
             "timestamp": context.timestamp if hasattr(context, 'timestamp') else None
