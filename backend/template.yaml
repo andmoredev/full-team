@@ -167,7 +167,7 @@ Resources:
               Bucket: !Ref ArtifactsBucketName
               Prefix: agents/boilerplate-agent.zip
           EntryPoint:
-            - invoke
+            - agent.py
           Runtime: PYTHON_3_13
       AgentRuntimeName: BoilerplateAgentDirect
       Description: Boilerplate agent deployed using direct code deployment (ZIP file)
