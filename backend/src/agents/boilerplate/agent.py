@@ -82,7 +82,9 @@ def invoke(payload, context):
 
         # Extract session and actor information from context
         session_id = getattr(context, 'session_id', 'default')
-        actor_id = context.headers.get('X-Amzn-Bedrock-AgentCore-Runtime-Custom-Actor-Id', 'user') if hasattr(context, 'headers') else 'user'
+        actor_id = 'user'
+        if hasattr(context, 'request_headers') and context.request_headers:
+            actor_id = context.request_headers.get('X-Amzn-Bedrock-AgentCore-Runtime-Custom-Actor-Id', 'user')
 
         # Configure memory if available
         memory_config = None
@@ -108,20 +110,26 @@ def invoke(payload, context):
 
         # Process the request
         logger.info("Processing calculation request", extra={"session_id": session_id, "actor_id": actor_id})
-        response = agent(enhanced_prompt)
 
-        # Extract response text - handle both streaming and non-streaming responses
-        if hasattr(response, 'message'):
-            response_text = response.message.content[0].text if hasattr(response.message, 'content') else str(response.message)
+        # Call the agent - this returns an AgentResponse object
+        agent_response = agent(enhanced_prompt)
+
+        # Extract the text from the response
+        # The response structure is: agent_response.data.content (list of content blocks)
+        response_text = ""
+        if hasattr(agent_response, 'data') and hasattr(agent_response.data, 'content'):
+            for content_block in agent_response.data.content:
+                if hasattr(content_block, 'text'):
+                    response_text += content_block.text
         else:
-            response_text = str(response)
+            response_text = str(agent_response)
 
         result = {
             "status": "success",
             "response": response_text,
             "session_id": session_id,
             "actor_id": actor_id,
-            "timestamp": context.timestamp if hasattr(context, 'timestamp') else None
+            "timestamp": None
         }
 
         logger.info("Calculator agent completed successfully")
@@ -132,7 +140,7 @@ def invoke(payload, context):
         return {
             "status": "error",
             "error": str(e),
-            "timestamp": getattr(context, 'timestamp', None) if context else None
+            "timestamp": None
         }
 
 if __name__ == "__main__":
