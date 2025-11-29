@@ -141,35 +141,39 @@ jobs:
       - name: Package agent
         working-directory: backend/src/agents/boilerplate
         run: |
-          BUILD_DIR="/tmp/boilerplate-agent-build"
+          DEPLOYMENT_DIR="deployment_package"
           ZIP_FILE="/tmp/boilerplate-agent.zip"
 
           echo "Packaging boilerplate agent for direct code deployment..."
 
           # Clean up previous builds
-          rm -rf "$BUILD_DIR"
+          rm -rf "$DEPLOYMENT_DIR"
           rm -f "$ZIP_FILE"
 
-          # Create build directory
-          mkdir -p "$BUILD_DIR"
+          # Create deployment directory
+          mkdir -p "$DEPLOYMENT_DIR"
 
-          # Copy agent code
-          echo "Copying agent code..."
-          cp agent.py "$BUILD_DIR/"
-          cp requirements.txt "$BUILD_DIR/"
-
-          # Install dependencies using uv for ARM64
+          # Install dependencies using uv for ARM64 (following AWS docs exactly)
           echo "Installing dependencies for ARM64 using uv..."
-          cd "$BUILD_DIR"
-          uv pip install -r requirements.txt \
-            --target . \
-            --python 3.13 \
-            --python-platform linux \
-            --python-architecture aarch64
+          uv pip install \
+            --python-platform aarch64-manylinux2014 \
+            --python-version 3.13 \
+            --target="$DEPLOYMENT_DIR" \
+            --only-binary=:all: \
+            -r requirements.txt
 
-          # Create ZIP file
-          echo "Creating ZIP file..."
-          zip -r "$ZIP_FILE" . -x "*.pyc" -x "*__pycache__*" -x "*.dist-info/*"
+          # Create ZIP file with installed libraries
+          echo "Creating ZIP file with dependencies..."
+          cd "$DEPLOYMENT_DIR"
+          zip -r "$ZIP_FILE" .
+
+          # Add the agent.py file to the root of the ZIP
+          echo "Adding agent.py to ZIP..."
+          cd ..
+          zip "$ZIP_FILE" agent.py
+
+          # Set file permissions (AWS requirement)
+          chmod 644 agent.py
 
           echo "ZIP_FILE=$ZIP_FILE" >> $GITHUB_ENV
           echo "Package created: $(du -h $ZIP_FILE | cut -f1)" >> $GITHUB_STEP_SUMMARY
