@@ -164,8 +164,8 @@ jobs:
           pip install -r "$AGENT_DIR/requirements.txt" \
             -t "$BUILD_DIR/" \
             --platform manylinux2014_aarch64 \
-            --only-binary=:all: \
             --python-version 3.13 \
+            --implementation cp \
             --upgrade
 
           # Create ZIP file
