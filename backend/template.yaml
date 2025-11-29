@@ -7,6 +7,15 @@ Parameters:
     Type: String
     Description: URI of the container image
 
+  ArtifactsBucketName:
+    Type: String
+    Description: S3 bucket name for deployment artifacts (used for direct code deployment)
+
+  DirectDeployKey:
+    Type: String
+    Description: S3 key for direct code deployment ZIP file
+    Default: "agents/boilerplate-agent.zip"
+
 Resources:
   BedrockAgentCoreRole:
     Type: AWS::IAM::Role
@@ -36,6 +45,12 @@ Resources:
                   - ecr:GetDownloadUrlForLayer
                 Resource:
                   - !Sub "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/*"
+              - Sid: S3DirectDeployAccess
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource:
+                  - !Sub "arn:aws:s3:::${ArtifactsBucketName}/*"
               - Effect: Allow
                 Action:
                   - logs:DescribeLogStreams
@@ -135,14 +150,45 @@ Resources:
                   - "arn:aws:bedrock:*::foundation-model/*"
                   - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:*"
 
-  BoilerPlateAgentCoreRuntime:
+  BoilerplateAgentECRRuntime:
     Type: AWS::BedrockAgentCore::Runtime
     Properties:
       AgentRuntimeArtifact:
         ContainerConfiguration:
           ContainerUri: !Ref ContainerUri
-      AgentRuntimeName: BoilerPlateAgent
-      Description: Agent to test how the deployment and execution of agentcore runtimes work.
+      AgentRuntimeName: BoilerplateAgentECR
+      Description: Boilerplate agent deployed via ECR container
       NetworkConfiguration:
         NetworkMode: PUBLIC
       RoleArn: !GetAtt BedrockAgentCoreRole.Arn
+
+  BoilerplateAgentDirectRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    Properties:
+      AgentRuntimeArtifact:
+        CodeConfiguration:
+          Code:
+            S3:
+              Bucket: !Ref ArtifactsBucketName
+              Prefix: !Ref DirectDeployKey
+          EntryPoint:
+            - agent.py
+          Runtime: PYTHON_3_13
+      AgentRuntimeName: BoilerplateAgentDirect
+      Description: Boilerplate agent deployed using direct code deployment (ZIP file)
+      NetworkConfiguration:
+        NetworkMode: PUBLIC
+      RoleArn: !GetAtt BedrockAgentCoreRole.Arn
+
+Outputs:
+  BoilerplateAgentDirectRuntimeArn:
+    Description: ARN of the Boilerplate Agent Direct Runtime
+    Value: !GetAtt BoilerplateAgentDirectRuntime.AgentRuntimeArn
+    Export:
+      Name: !Sub "${AWS::StackName}-BoilerplateAgentDirectRuntimeArn"
+
+  BoilerplateAgentECRRuntimeArn:
+    Description: ARN of the Boilerplate Agent ECR Runtime
+    Value: !GetAtt BoilerplateAgentECRRuntime.AgentRuntimeArn
+    Export:
+      Name: !Sub "${AWS::StackName}-BoilerplateAgentECRRuntimeArn"

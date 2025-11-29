@@ -116,9 +116,84 @@ jobs:
             echo "sha_image=${{ steps.derive.outputs.account_id }}.dkr.ecr.${{ steps.derive.outputs.region }}.amazonaws.com/${{ steps.derive.outputs.repo_name }}:$SHORT_SHA" >> $GITHUB_OUTPUT
             echo "Pushed latest and $SHORT_SHA" >> $GITHUB_STEP_SUMMARY
 
+  package-and-upload-agent:
+    name: Package & Upload Boilerplate Agent for Direct Deploy
+    needs: deploy-ecr
+    outputs:
+      s3_key: ${{ steps.upload.outputs.s3_key }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-region: us-east-1
+          role-to-assume: ${{ secrets.PIPELINE_EXECUTION_ROLE }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Package agent
+        working-directory: backend/src/agents/boilerplate
+        run: |
+          DEPLOYMENT_DIR="deployment_package"
+          ZIP_FILE="/tmp/boilerplate-agent.zip"
+
+          echo "Packaging boilerplate agent for direct code deployment..."
+
+          # Clean up previous builds
+          rm -rf "$DEPLOYMENT_DIR"
+          rm -f "$ZIP_FILE"
+
+          # Create deployment directory
+          mkdir -p "$DEPLOYMENT_DIR"
+
+          # Install dependencies using uv for ARM64 (following AWS docs exactly)
+          echo "Installing dependencies for ARM64 using uv..."
+          uv pip install \
+            --python-platform aarch64-manylinux2014 \
+            --python-version 3.13 \
+            --target="$DEPLOYMENT_DIR" \
+            --only-binary=:all: \
+            -r requirements.txt
+
+          # Create ZIP file with installed libraries
+          echo "Creating ZIP file with dependencies..."
+          cd "$DEPLOYMENT_DIR"
+          zip -r "$ZIP_FILE" .
+
+          # Add the agent.py file to the root of the ZIP
+          echo "Adding agent.py to ZIP..."
+          cd ..
+          zip "$ZIP_FILE" agent.py
+
+          # Set file permissions (AWS requirement)
+          chmod 644 agent.py
+
+          echo "ZIP_FILE=$ZIP_FILE" >> $GITHUB_ENV
+          echo "Package created: $(du -h $ZIP_FILE | cut -f1)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload to S3
+        id: upload
+        run: |
+          BUCKET_NAME="${{ secrets.ARTIFACTS_BUCKET_NAME }}"
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          S3_KEY="agents/boilerplate-agent-${TIMESTAMP}.zip"
+
+          aws s3 cp "$ZIP_FILE" "s3://$BUCKET_NAME/$S3_KEY"
+          echo "s3_key=$S3_KEY" >> $GITHUB_OUTPUT
+          echo "✓ Uploaded to s3://$BUCKET_NAME/$S3_KEY" >> $GITHUB_STEP_SUMMARY
+
   deploy-runtime:
     name: Deploy AgentCore Runtime
-    needs: [deploy-ecr, build-and-push-image]
+    needs: [deploy-ecr, build-and-push-image, package-and-upload-agent]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -159,5 +234,5 @@ jobs:
             --config-env dev \
             --s3-bucket "${{ secrets.ARTIFACTS_BUCKET_NAME }}" \
             --role-arn "${{ secrets.CLOUDFORMATION_EXECUTION_ROLE }}" \
-            --parameter-overrides ContainerUri=${{ steps.image.outputs.container_uri }} \
+            --parameter-overrides ContainerUri=${{ steps.image.outputs.container_uri }} ArtifactsBucketName=${{ secrets.ARTIFACTS_BUCKET_NAME }} DirectDeployKey=${{ needs.package-and-upload-agent.outputs.s3_key }} \
             --no-fail-on-empty-changeset
