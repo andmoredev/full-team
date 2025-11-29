@@ -11,6 +11,11 @@ Parameters:
     Type: String
     Description: S3 bucket name for deployment artifacts (used for direct code deployment)
 
+  DirectDeployKey:
+    Type: String
+    Description: S3 key for direct code deployment ZIP file
+    Default: "agents/boilerplate-agent.zip"
+
 Resources:
   BedrockAgentCoreRole:
     Type: AWS::IAM::Role
@@ -165,7 +170,7 @@ Resources:
           Code:
             S3:
               Bucket: !Ref ArtifactsBucketName
-              Prefix: agents/boilerplate-agent.zip
+              Prefix: !Ref DirectDeployKey
           EntryPoint:
             - agent.py
           Runtime: PYTHON_3_13

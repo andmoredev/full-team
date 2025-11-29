@@ -119,6 +119,8 @@ jobs:
   package-and-upload-agent:
     name: Package & Upload Boilerplate Agent for Direct Deploy
     needs: deploy-ecr
+    outputs:
+      s3_key: ${{ steps.upload.outputs.s3_key }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -179,10 +181,15 @@ jobs:
           echo "Package created: $(du -h $ZIP_FILE | cut -f1)" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload to S3
+        id: upload
         run: |
           BUCKET_NAME="${{ secrets.ARTIFACTS_BUCKET_NAME }}"
-          aws s3 cp "$ZIP_FILE" "s3://$BUCKET_NAME/agents/boilerplate-agent.zip"
-          echo "✓ Uploaded to s3://$BUCKET_NAME/agents/boilerplate-agent.zip" >> $GITHUB_STEP_SUMMARY
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          S3_KEY="agents/boilerplate-agent-${TIMESTAMP}.zip"
+
+          aws s3 cp "$ZIP_FILE" "s3://$BUCKET_NAME/$S3_KEY"
+          echo "s3_key=$S3_KEY" >> $GITHUB_OUTPUT
+          echo "✓ Uploaded to s3://$BUCKET_NAME/$S3_KEY" >> $GITHUB_STEP_SUMMARY
 
   deploy-runtime:
     name: Deploy AgentCore Runtime
@@ -227,5 +234,5 @@ jobs:
             --config-env dev \
             --s3-bucket "${{ secrets.ARTIFACTS_BUCKET_NAME }}" \
             --role-arn "${{ secrets.CLOUDFORMATION_EXECUTION_ROLE }}" \
-            --parameter-overrides ContainerUri=${{ steps.image.outputs.container_uri }} ArtifactsBucketName=${{ secrets.ARTIFACTS_BUCKET_NAME }} \
+            --parameter-overrides ContainerUri=${{ steps.image.outputs.container_uri }} ArtifactsBucketName=${{ secrets.ARTIFACTS_BUCKET_NAME }} DirectDeployKey=${{ needs.package-and-upload-agent.outputs.s3_key }} \
             --no-fail-on-empty-changeset
