@@ -133,15 +133,14 @@ jobs:
           aws-region: us-east-1
           role-to-assume: ${{ secrets.PIPELINE_EXECUTION_ROLE }}
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: '3.13'
+          enable-cache: true
 
       - name: Package agent
-        working-directory: backend
+        working-directory: backend/src/agents/boilerplate
         run: |
-          AGENT_DIR="src/agents/boilerplate"
           BUILD_DIR="/tmp/boilerplate-agent-build"
           ZIP_FILE="/tmp/boilerplate-agent.zip"
 
@@ -156,22 +155,21 @@ jobs:
 
           # Copy agent code
           echo "Copying agent code..."
-          cp "$AGENT_DIR/agent.py" "$BUILD_DIR/"
-          cp "$AGENT_DIR/requirements.txt" "$BUILD_DIR/"
+          cp agent.py "$BUILD_DIR/"
+          cp requirements.txt "$BUILD_DIR/"
 
-          # Install dependencies for ARM64 architecture
-          echo "Installing dependencies for ARM64..."
-          pip install -r "$AGENT_DIR/requirements.txt" \
-            -t "$BUILD_DIR/" \
-            --platform manylinux2014_aarch64 \
-            --python-version 3.13 \
-            --implementation cp \
-            --upgrade
+          # Install dependencies using uv for ARM64
+          echo "Installing dependencies for ARM64 using uv..."
+          cd "$BUILD_DIR"
+          uv pip install -r requirements.txt \
+            --target . \
+            --python 3.13 \
+            --python-platform linux \
+            --python-architecture aarch64
 
           # Create ZIP file
           echo "Creating ZIP file..."
-          cd "$BUILD_DIR"
-          zip -r "$ZIP_FILE" . -x "*.pyc" -x "*__pycache__*"
+          zip -r "$ZIP_FILE" . -x "*.pyc" -x "*__pycache__*" -x "*.dist-info/*"
 
           echo "ZIP_FILE=$ZIP_FILE" >> $GITHUB_ENV
           echo "Package created: $(du -h $ZIP_FILE | cut -f1)" >> $GITHUB_STEP_SUMMARY
